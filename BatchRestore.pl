@@ -135,8 +135,8 @@ sub FindBackupLabel {
 
 # --
 # FindPlugin
-# inputs source client, source domain for client, and date
-# returns backup label for given date or 0 on error
+# inputs destination client and domain for client
+# returns plugin ID # for given client or 0 on error
 # --
 sub FindPlugin {
 	my $domain = $_[0];
