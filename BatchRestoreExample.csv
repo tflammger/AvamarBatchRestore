@@ -1,0 +1,14 @@
+# Batch Restore Example File
+# Notes: 
+# Anything prefixed with a hash is a comment and ignored by processor
+# white space is for human readable formatting and ignored by processor
+# values are delimited by coma seperator
+# client and domain names can be found with mccli client show commands or in Avamar GUI’s Policy Management screen
+# windows directories must use escaped back-slash 
+#+------------------------------------------------------------+------------------------+---------------------------------------+-------------------------+------------------------+----------------------------------------------------+----------------+
+#|  SourceDomain                                              |  SourceCLient          |  SourceDirectory                      |  DestinationDomain      |  DestinationClient     |  DestinationDirectory                              |  OverwriteOpt  |
+#+------------------------------------------------------------+------------------------+---------------------------------------+-------------------------+------------------------+----------------------------------------------------+----------------+
+/REPLICATE/avamar_FQDN/clients,                                  host.domain.com,         D:\\,                                   clients,                  host.domain.com,         D:\\,                                                always
+/REPLICATE/avamar_FQDN/clients,                                  hostname,                C:\\ProgramData,                        clients,                  hostname,                C:\\ProgramData,                                     never
+/REPLICATE/avamar_FQDN/clients,                                  hostname,                D:\\,                                   clients,                  hostname,                D:\\,                                                modified
+/REPLICATE/avamar_FQDN/clients/DD9500_clients,                   host.domain.com,         E:\\MSSQL10_50\\Backup\\UserDatabases,  clients/DD9500_clients,   hostname.domain.com,     E:\\MSSQL10_50\Backup\UserDatabases,                 modified
