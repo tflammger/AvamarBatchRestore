@@ -5,7 +5,7 @@
 #----------------------------------------------------------------#
 # Script restores a batch of servers using mccli and CSV file
 # Author: Timothy Flammger 		<https://github.com/tflammger>
-# Last Update: July 21, 2016
+# Last Update: September 28, 2016
 #----------------------------------------------------------------#
 
 # process command flags with getopt
@@ -52,7 +52,8 @@ print ERRHANDLE "------------------------------------------------------------\n\
 open (CFGHANDLE, " < $configFile")
 	or die("Couldn't find $configFile anywhere...Bye Bye $! \n");
 
-my $count=1;	
+my $count=1;
+my $errCount=0;
 while (<CFGHANDLE>) {
 	chomp;
 	s/#.*//;	# drop comments
@@ -66,12 +67,14 @@ while (<CFGHANDLE>) {
 
 	# attempt to kick off restore job
 	print LOGHANDLE localtime() . ": Attempting restore for $cmdArray[1] \n";	
-	my $retVal = StartRestore (@cmdArray, $count);
-	if ($retVal != 0) {
+	if (StartRestore (@cmdArray, $count) != 0) {
 		# should do something more verbose with the error codes eventually
 		# 10 = failed plugin lookup; 20 = failed label lookup; 30 = mccli restore cmd fail
 		print "Something went wrong with restore of client $cmdArray[1] ... please check $errFile and $logFile for more info \n";
-		print LOGHANDLE localtime() . ": Something went wrong with restore of client $cmdArray[1] \n";
+		print LOGHANDLE localtime() . ": Restore job failed to start for client $cmdArray[1] \n";
+		print ERRHANDLE localtime() . ": Restore job failed to start using configuration detail:\n";
+		print ERRHANDLE join(",", @cmdArray) . "\n";
+		$errCount++;
 	} else {
 		print "Restore of client $cmdArray[1] started successfully. \n";
 		print LOGHANDLE localtime() . ": Restore of client $cmdArray[1] started successfully. \n";
@@ -83,7 +86,7 @@ my $scriptEnd = localtime();
 print "BatchRestore completed\n";
 print LOGHANDLE "\n------------------------------------------------------------\n";
 print LOGHANDLE "\tBatchRestore completed: $scriptEnd \n";
-print LOGHANDLE "\tProcessed $count records \n";
+print LOGHANDLE "\tProcessed $count records ($errCount jobs failed)\n";
 print LOGHANDLE "------------------------------------------------------------\n\n";
 print ERRHANDLE "\n------------------------------------------------------------\n";
 print ERRHANDLE "\tBatchRestore completed: $scriptEnd \n";
@@ -135,8 +138,8 @@ sub FindBackupLabel {
 
 # --
 # FindPlugin
-# inputs destination client and domain for client
-# returns plugin ID # for given client or 0 on error
+# inputs source client, source domain for client, and date
+# returns backup label for given date or 0 on error
 # --
 sub FindPlugin {
 	my $domain = $_[0];
@@ -230,24 +233,30 @@ sub StartRestore {
 	}
 	print LOGHANDLE localtime() . ": located client ($dstDomain/$dstClient)... using plugin ($pluginNumber) for restore \n";
 	
+	# set office option for windows
+	my $officeXML = "";
+	if ($pluginNumber == 3001) {
+		$officeXML = '--cmd="deflateofficexml=false"';
+		}
+	
 	# Get backup Label: Will return 0 if we cannot find a valid backup label for the source client
-	print LOGHANDLE localtime() . ": Searching for label to restore $srcDomain/$srcClient to $date... \n";
+	print LOGHANDLE localtime() . ": Searching for label to restore $srcDomain/$srcClient to $restoreDate... \n";
 	my $backupLabel = FindBackupLabel ($srcDomain, $srcClient, $restoreDate);
 	if ($backupLabel == 0) { 
-		print ERRHANDLE localtime() . ": No Backup found for $srcDomain/$srcClient on $date \n";
+		print ERRHANDLE localtime() . ": No Backup found for $srcDomain/$srcClient on $restoreDate \n";
 		return (20);
 	}
 	print LOGHANDLE localtime() . ": Found Backup Label ($backupLabel) for Client ($srcClient) on Date ($restoreDate) \n";
 	
 	# Do restore job
-	print LOGHANDLE localtime() . ": Executing Restore from Client ($srcClient) to Destination ($dstClient) this will restore ($srcDirectory) to ($dstDirectory) \n";
-	my $mccliReturn = system ("mccli backup restore --cmd=\"existing-file-overwrite-option=$overwriteOpt\" --cmd=\"deflateofficexml=false\" --domain=$srcDomain --name=$srcClient --data=$srcDirectory --labelNum=$backupLabel --dest-client-domain=$dstDomain --dest-client-name=$dstClient --dest-dir=$dstDirectory --plugin=$pluginNumber");
-
 	# The mccli command below stattically uses the --cmd="deflateofficexml=false" option to avoid currupting MS Office XLM format files.
-	# As of June 2016 EMC support position is that this option will cause no harm on restores that don't need it so we are using it globally here. 
+	# As of June 2016 EMC support position is that this option will cause no harm on restores that don't need it so we are using it on all Windows restores (*nix will fail with the option on). 
+	print LOGHANDLE localtime() . ": Executing Restore from Client ($srcClient) to Destination ($dstClient) this will restore ($srcDirectory) to ($dstDirectory) \n";
+	my $mccliReturn = system ("mccli backup restore --cmd=\"existing-file-overwrite-option=$overwriteOpt\" --domain=$srcDomain --name=$srcClient --data=$srcDirectory --labelNum=$backupLabel --dest-client-domain=$dstDomain --dest-client-name=$dstClient --dest-dir=$dstDirectory --plugin=$pluginNumber $officeXML");
+	#debug	print "mccli backup restore --cmd=\"existing-file-overwrite-option=$overwriteOpt\" --domain=$srcDomain --name=$srcClient --data=$srcDirectory --labelNum=$backupLabel --dest-client-domain=$dstDomain --dest-client-name=$dstClient --dest-dir=$dstDirectory --plugin=$pluginNumber $officeXML \n";
+	
 	if ($mccliReturn != 0) {
-		print ERRHANDLE localtime() . ": Execution of mccli backup restore failed for $srcClient ($mccliReturn) trying to execute: \n";
-		print ERRHANDLE "\tmccli backup restore --cmd=\"existing-file-overwrite-option=$overwriteOpt\" --cmd=\"deflateofficexml=false\" --domain=$srcDomain --name=$srcClient --data=$srcDirectory --labelNum=$backupLabel --dest-client-domain=$dstDomain --dest-client-name=$dstClient --dest-dir=$dstDirectory --plugin=$pluginNumber \n";
+		print ERRHANDLE localtime() . ": Execution of mccli backup restore failed for $srcClient with error: ($mccliReturn) \n";
 		return (30); 
 	}
 	print LOGHANDLE localtime() . ": Restore job $counter from $restoreDate started successfully. ($srcDomain/$srcClient $srcDirectory ==> $dstDomain/$dstClient $dstDirectory using label $backupLabel)\n";
