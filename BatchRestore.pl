@@ -5,7 +5,7 @@
 #----------------------------------------------------------------#
 # Script restores a batch of servers using mccli and CSV file
 # Author: Timothy Flammger 		<https://github.com/tflammger>
-# Last Update: September 28, 2016
+# Last Update: May 22, 2017
 #----------------------------------------------------------------#
 
 # process command flags with getopt
@@ -112,9 +112,14 @@ sub FindBackupLabel {
 	my $client = $_[1];
 	my $date = $_[2];
 	my $backupLabel = 0;
+	
+	#after Avamar 7.3 the before/after dates are no longer inclusive, this adds 1 day to the target date for before cutoff
+	my ($yyyy, $mm, $dd) = split(/-/, $date);
+	$dd++;
+	my $datePlus = "$yyyy-$mm-$dd";
 
-	# debug: die("mccli backup show --domain=$domain --name=$client --before=$date --after=$date\n");
-	open (my $mccli, "mccli backup show --domain=$domain --name=$client --before=$date --after=$date|") or die "Could not run command: $!\n";
+	# debug: 	die("mccli backup show --domain=$domain --name=$client --after=$date --before=$datePlus \n");
+	open (my $mccli, "mccli backup show --domain=$domain --name=$client --after=$date --before=$datePlus|") or die "Could not run command: $!\n";
 	while (my $row = <$mccli>) {
 		chomp $row;
 		push (@tempArray, $row);
